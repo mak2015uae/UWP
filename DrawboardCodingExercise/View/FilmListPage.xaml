@@ -1,0 +1,105 @@
+<Page
+	x:Class="DrawboardCodingExercise.View.FilmListPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:interactivity="using:Microsoft.Xaml.Interactivity"
+	xmlns:interactions="using:Microsoft.Xaml.Interactions.Core"
+	xmlns:valueConverters="using:DrawboardCodingExercise.ValueConverters"
+	xmlns:items="using:DrawboardCodingExercise.ViewModel.Items"
+	xmlns:designTime="using:DrawboardCodingExercise.ViewModel.DesignTime"
+	mc:Ignorable="d"
+	Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+	d:DataContext="{d:DesignInstance designTime:DesignTimeFilmListViewModel, IsDesignTimeCreatable=True}">
+
+	<Page.Resources>
+		<valueConverters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+		<valueConverters:ItemClickToClickedItemConverter x:Key="ItemClickToClickedItemConverter" />
+	</Page.Resources>
+
+	<!--
+		The page binds with classic bindings rather than x:Bind, because the navigation service assigns the
+		DataContext after the page has been constructed. Item templates do use x:Bind: rows are immutable, so
+		one-time compiled bindings are both the cheapest option and the correct one.
+	-->
+	<Grid Margin="24,16,24,0">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+		</Grid.RowDefinitions>
+
+		<TextBlock
+			x:Name="FilmListHeading"
+			x:Uid="FilmListHeading"
+			Grid.Row="0"
+			Margin="0,0,0,8"
+			Style="{StaticResource SubheaderTextBlockStyle}"
+			Text="Films"
+			TextWrapping="Wrap" />
+
+		<ListView
+			Grid.Row="1"
+			AutomationProperties.LabeledBy="{Binding ElementName=FilmListHeading}"
+			IsItemClickEnabled="True"
+			ItemsSource="{Binding Films}"
+			SelectionMode="None"
+			Visibility="{Binding HasFilms, Converter={StaticResource BoolToVisibilityConverter}}">
+
+			<!--
+				ItemClick is routed to a command through a behaviour so that navigation stays in the ViewModel
+				and this page keeps no event handlers in its code-behind. The input converter extracts the
+				clicked row from the event arguments.
+			-->
+			<interactivity:Interaction.Behaviors>
+				<interactions:EventTriggerBehavior EventName="ItemClick">
+					<interactions:InvokeCommandAction
+						Command="{Binding FilmSelectedCommand}"
+						InputConverter="{StaticResource ItemClickToClickedItemConverter}" />
+				</interactions:EventTriggerBehavior>
+			</interactivity:Interaction.Behaviors>
+
+			<ListView.ItemTemplate>
+				<DataTemplate x:DataType="items:FilmListItemViewModel">
+					<StackPanel Padding="0,10">
+						<TextBlock
+							Style="{StaticResource SubtitleTextBlockStyle}"
+							Text="{x:Bind Title}"
+							TextWrapping="Wrap" />
+						<TextBlock
+							Opacity="0.75"
+							Style="{StaticResource BodyTextBlockStyle}"
+							Text="{x:Bind EpisodeLabel}" />
+					</StackPanel>
+				</DataTemplate>
+			</ListView.ItemTemplate>
+		</ListView>
+
+		<TextBlock
+			x:Uid="FilmListEmpty"
+			Grid.Row="1"
+			VerticalAlignment="Top"
+			Style="{StaticResource BodyTextBlockStyle}"
+			Text="No films were returned."
+			TextWrapping="Wrap"
+			Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+		<StackPanel
+			Grid.Row="1"
+			VerticalAlignment="Top"
+			Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}">
+			<TextBlock
+				Foreground="{ThemeResource SystemControlErrorTextForegroundBrush}"
+				Style="{StaticResource BodyTextBlockStyle}"
+				Text="{Binding ErrorMessage}"
+				TextWrapping="Wrap" />
+			<TextBlock
+				x:Uid="FilmListErrorHint"
+				Margin="0,4,0,0"
+				Opacity="0.75"
+				Style="{StaticResource CaptionTextBlockStyle}"
+				Text="Check your connection and reopen the page to try again."
+				TextWrapping="Wrap" />
+		</StackPanel>
+	</Grid>
+</Page>

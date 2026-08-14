@@ -1,9 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- XML documentation is a build gate: CS1591 (missing doc comment) fails the build. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +18,14 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="Shouldly" Version="4.2.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
+    <!--
+      Without the runner adapter, the test host discovers no xUnit tests at all and reports success, so these
+      tests silently never ran.
+    -->
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,6 +34,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DrawboardCodingExercise.Services\DrawboardCodingExercise.Services.csproj" />
+    <ProjectReference Include="..\DrawboardCodingExercise.TestSupport\DrawboardCodingExercise.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

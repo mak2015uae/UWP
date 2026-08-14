@@ -28,7 +28,19 @@ public class NavigationService : IFrameNavigator, INavigationService
 	private readonly IThreadDispatcher _threadDispatcher;
 	private Frame _frame;
 
+	/// <inheritdoc />
 	public event Action Navigated;
+
+	/// <summary>
+	/// Initializes a new instance of the <see cref="NavigationService"/> class.
+	/// </summary>
+	/// <param name="componentContext">
+	/// Resolves page types and ViewModels by key. A page cannot be resolved before its key is known, so the
+	/// container is used directly here rather than through injected factories — deliberately confined to this
+	/// one seam.
+	/// </param>
+	/// <param name="logger">Receives navigation timings and failures.</param>
+	/// <param name="threadDispatcher">Ensures navigation runs on the UI thread.</param>
 	public NavigationService(IComponentContext componentContext, ILogger logger, IThreadDispatcher threadDispatcher)
 	{
 		_componentContext = componentContext;
@@ -36,11 +48,16 @@ public class NavigationService : IFrameNavigator, INavigationService
 		_threadDispatcher = threadDispatcher;
 	}
 
+	/// <inheritdoc />
 	public bool CanGoBack => _frame.BackStackDepth > 0;
 
 	/// <summary>
 	/// The frame that will be managed by this NavigationService
 	/// </summary>
+	/// <value>
+	/// Assigned once by the shell during its construction, before any navigation is attempted. Write-only:
+	/// nothing outside the shell has any business reaching the frame directly.
+	/// </value>
 	public Frame Frame
 	{
 		set => _frame = value;
@@ -51,6 +68,13 @@ public class NavigationService : IFrameNavigator, INavigationService
 	/// </summary>
 	/// <param name="pageKey">The key that identifies the page</param>
 	/// <param name="parameter">any object that represents the parameters being passed.</param>
+	/// <returns>
+	/// A task that completes once the target page's ViewModel has finished its navigated-to hook.
+	/// </returns>
+	/// <exception cref="Exception">
+	/// Rethrows anything the target page or its ViewModel throws, after logging it as fatal. A page that cannot
+	/// handle its own navigation is a defect, not a condition to be swallowed.
+	/// </exception>
 	public async Task NavigateAsync(PageKey pageKey, object parameter = null)
 	{
 		var logger = _logger.ForContext("Parameter", parameter, true);
@@ -97,6 +121,12 @@ public class NavigationService : IFrameNavigator, INavigationService
 		}
 	}
 
+	/// <inheritdoc />
+	/// <remarks>
+	/// Raises <see cref="Navigated"/> in the same way as a forward navigation. Without it, shell chrome bound to
+	/// <see cref="CanGoBack"/> would keep the state it had before going back — leaving the back button enabled
+	/// at the root of the stack until the next forward navigation.
+	/// </remarks>
 	public async Task BackAsync()
 	{
 		var lastEntry = _frame.BackStack.LastOrDefault();
@@ -111,6 +141,7 @@ public class NavigationService : IFrameNavigator, INavigationService
 			logger = logger.ForContext("Parameter", navigationDetails.Parameter, true);
 
 			_frame.GoBack();
+			Navigated?.Invoke();
 			if (_frame.Content is FrameworkElement newContent)
 			{
 				_componentContext.InjectUnsetProperties(newContent);

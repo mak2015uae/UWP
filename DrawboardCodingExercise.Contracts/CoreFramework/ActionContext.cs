@@ -10,7 +10,7 @@ namespace DrawboardCodingExercise.Contracts.CoreFramework;
 /// </summary>
 public static class ActionContext
 {
-	private static readonly AsyncLocal<string> AsyncLocalCorrelationId = new();
+	private static readonly AsyncLocal<string?> AsyncLocalCorrelationId = new();
 
 	/// <summary>
 	/// Request a new action context if one is not in progress

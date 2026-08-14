@@ -1,7 +1,8 @@
-﻿using Autofac;
+using Autofac;
 using DrawboardCodingExercise.Contracts.CoreFramework;
 using DrawboardCodingExercise.Contracts.Services;
 using DrawboardCodingExercise.CoreFramework;
+using DrawboardCodingExercise.Services;
 using DrawboardCodingExercise.Services.EventAggregator;
 using JetBrains.Annotations;
 
@@ -13,6 +14,10 @@ namespace DrawboardCodingExercise.Module;
 [UsedImplicitly]
 public class CoreServicesModule : Autofac.Module
 {
+	/// <summary>
+	/// Registers the navigation, threading, messaging, interaction, localization and progress services.
+	/// </summary>
+	/// <param name="builder">The container builder being configured.</param>
 	protected override void Load(ContainerBuilder builder)
 	{
 		builder.RegisterType<NavigationService>().As<INavigationService, IFrameNavigator>().SingleInstance();
@@ -21,5 +26,7 @@ public class CoreServicesModule : Autofac.Module
 		builder.RegisterType<EventAggregator>().As<IEventAggregator>().SingleInstance();
 		builder.RegisterType<UserInteractionService>().As<IUserInteractionService>();
 		builder.RegisterType<LocalizationService>().As<ILocalizationService>();
+
+		builder.RegisterType<BusyOperationRunner>().As<IBusyOperationRunner>();
 	}
 }

@@ -3,12 +3,23 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- XML documentation is a build gate: CS1591 (missing doc comment) fails the build. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Reactive" Version="6.0.1" />
-    <PackageReference Include="System.Threading.Tasks.Dataflow" Version="9.0.1" />
+    <!--
+      System.Threading.Tasks.Dataflow was removed with the event aggregator's rewrite. Its broadcast block could
+      not guarantee delivery order across separate subscriptions, which left the shell's progress indicator stuck;
+      the replacement needs no dataflow, so the dependency would now be dead weight.
+    -->
   </ItemGroup>
 
   <ItemGroup>

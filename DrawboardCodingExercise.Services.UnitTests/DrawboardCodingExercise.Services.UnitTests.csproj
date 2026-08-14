@@ -1,9 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- XML documentation is a build gate: CS1591 (missing doc comment) fails the build. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DrawboardCodingExercise.Services\DrawboardCodingExercise.Services.csproj" />
+    <ProjectReference Include="..\DrawboardCodingExercise.TestSupport\DrawboardCodingExercise.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

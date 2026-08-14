@@ -18,7 +18,19 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
-    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <!--
+      Signed with a self-signed test certificate whose subject must match the Publisher in Package.appxmanifest
+      ("CN=StevenBlom") — a mismatch fails the build. It is a development artefact, not a trusted authority, so
+      installing still needs the certificate in the machine's Trusted People store, or Developer Mode.
+
+      Enabled only when the key file is actually present. Private keys are excluded by .gitignore, so a fresh
+      clone has none: signing off by default there means the project still builds, and the package can be
+      installed with Developer Mode exactly as the original scaffold intended. Generate a key (see CHANGES.md)
+      and signing switches itself on.
+    -->
+    <AppxPackageSigningEnabled Condition="Exists('$(MSBuildProjectDirectory)\DrawboardCodingExercise_TemporaryKey.pfx')">true</AppxPackageSigningEnabled>
+    <AppxPackageSigningEnabled Condition="!Exists('$(MSBuildProjectDirectory)\DrawboardCodingExercise_TemporaryKey.pfx')">false</AppxPackageSigningEnabled>
+    <PackageCertificateKeyFile>DrawboardCodingExercise_TemporaryKey.pfx</PackageCertificateKeyFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM64'">
     <DebugSymbols>true</DebugSymbols>
@@ -74,6 +86,14 @@
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
+  <PropertyGroup>
+    <!--
+      XML documentation is a build gate in this project too: CS1591 (missing doc comment) fails the build.
+      Declared after the configuration-specific groups so that $(OutputPath) is already resolved.
+    -->
+    <DocumentationFile>$(OutputPath)DrawboardCodingExercise.xml</DocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
@@ -94,21 +114,26 @@
     <Compile Include="Module\WebServicesModule.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ValueConverters\BoolToVisibilityConverter.cs" />
+    <Compile Include="ValueConverters\ItemClickToClickedItemConverter.cs" />
     <Compile Include="ValueConverters\PageHeaderValueConverter.cs" />
-    <Compile Include="View\PageA.xaml.cs">
-      <DependentUpon>PageA.xaml</DependentUpon>
+    <Compile Include="View\FilmDetailPage.xaml.cs">
+      <DependentUpon>FilmDetailPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="View\FilmListPage.xaml.cs">
+      <DependentUpon>FilmListPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="View\Shell.xaml.cs">
       <DependentUpon>Shell.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="View\Welcome.xaml.cs">
-      <DependentUpon>Welcome.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
       <SubType>Designer</SubType>
     </AppxManifest>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Checked in so the package can be rebuilt on another machine; a test key, never a release credential. -->
+    <None Include="DrawboardCodingExercise_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\LargeTile.scale-100.png" />
@@ -173,15 +198,15 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="View\PageA.xaml">
+    <Page Include="View\FilmDetailPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="View\FilmListPage.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="View\Shell.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="View\Welcome.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

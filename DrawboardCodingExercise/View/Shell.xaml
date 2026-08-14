@@ -1,4 +1,4 @@
-﻿<Page
+<Page
     x:Class="DrawboardCodingExercise.View.Shell"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -28,7 +28,14 @@
 					<ColumnDefinition />
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
-				<Button Margin="0,0,8,0" Visibility="{Binding CanGoBack}" Command="{Binding GoBackCommand}">
+				<!--
+					CanGoBack is a boolean, so it needs the converter to drive Visibility; bound directly it
+					would silently never show the button.
+				-->
+				<Button x:Uid="ShellBackButton"
+				        Margin="0,0,8,0"
+				        Command="{Binding GoBackCommand}"
+				        Visibility="{Binding CanGoBack, Converter={StaticResource BoolToVisibilityConverter}}">
 					<SymbolIcon Symbol="Back" />
 				</Button>
 				<TextBlock
