@@ -39,6 +39,234 @@ Every requirement in [README.md](README.md), with how it was verified. Option 1 
 
 ---
 
+## 0.5 Debugging walkthrough — the flow, with class and method names
+
+Every participant below is a real type and every call a real method, with the file and line to breakpoint. Follow these four flows and you have walked the whole application.
+
+### Flow A — startup, to the first film on screen
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as App
+    participant AF as Autofac container
+    participant Shell as Shell
+    participant SVM as ShellViewModel
+    participant NS as NavigationService
+    participant Page as FilmListPage
+    participant VM as FilmListViewModel
+    participant Run as BusyOperationRunner
+    participant EA as EventAggregator
+    participant FS as FilmService
+    participant API as APIClient
+    participant RUR as RequestUriResolver
+    participant Map as FilmMapper
+
+    App->>App: OnLaunched
+    App->>AF: BuildContainer, RegisterAssemblyModules
+    Note over AF: CoreServicesModule, WebServicesModule, NavigationModule
+    App->>Shell: Resolve, ctor hands NavFrame to IFrameNavigator
+    App->>SVM: Resolve, assign as DataContext
+    App->>SVM: OnNavigatedToAsync null
+    SVM->>EA: SubscribeOnUI of NotifyBusyEvent and NotifyDoneEvent
+    SVM->>NS: NavigateAsync PageKey.FilmList
+    NS->>AF: ResolveKeyed of Type for FilmList
+    NS->>AF: ResolveOptionalKeyed of ObservableObject for FilmList
+    AF-->>NS: FilmListViewModel
+    NS->>Page: Frame.Navigate constructs the page
+    NS->>Page: InjectUnsetProperties, then set DataContext
+    NS->>VM: OnNavigatedToAsync
+    VM->>VM: BeginPageLifetime on PageViewModelBase
+    VM->>Run: RunAsync with busy message Films.Loading
+    Run->>EA: Post NotifyBusyEvent
+    EA->>SVM: OnNotifyBusy, IsBusy true
+    Run->>FS: GetFilmsAsync
+    FS->>API: GetAsync of FilmDto array, path films
+    API->>RUR: Resolve base plus films
+    RUR-->>API: https://swapi.info/api/films
+    API->>API: CallService, sends X-Correlation-Id
+    API->>API: Deserialize, throws if the body is null
+    API-->>FS: FilmDto array
+    FS->>Map: ToDomain, parses id, date, crawl, related URLs
+    Map-->>FS: Film list ordered by episode
+    FS->>FS: cache the list
+    FS-->>Run: Film list
+    Run->>EA: Post NotifyDoneEvent in finally
+    EA->>SVM: OnNotifyDone, IsBusy false
+    Run-->>VM: OperationOutcome success
+    VM->>VM: project to FilmListItemViewModel using EpisodeFormatter
+    VM-->>Page: Films setter raises PropertyChanged, ListView renders
+```
+
+**Breakpoints for flow A**
+
+| Order | Method | File |
+|---|---|---|
+| 1 | `App.OnLaunched` | [App.xaml.cs:35](DrawboardCodingExercise/App.xaml.cs#L35) |
+| 2 | `App.BuildContainer` | [App.xaml.cs:72](DrawboardCodingExercise/App.xaml.cs#L72) |
+| 3 | `ShellViewModel.OnNavigatedToAsync` | [ShellViewModel.cs:81](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L81) |
+| 4 | `NavigationService.NavigateAsync` | [NavigationService.cs:78](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L78) |
+| 5 | `FilmListViewModel.OnNavigatedToAsync` | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
+| 6 | `BusyOperationRunner.RunAsync` | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
+| 7 | `FilmService.GetFilmsAsync` | [FilmService.cs:68](DrawboardCodingExercise.Services/FilmService.cs#L68) |
+| 8 | `APIClient.GetAsync` | [APIClient.cs:117](DrawboardCodingExercise.Services/APIClient.cs#L117) |
+| 9 | `RequestUriResolver.Resolve` — **inspect the returned URI here** | [RequestUriResolver.cs:72](DrawboardCodingExercise.Services/Api/RequestUriResolver.cs#L72) |
+| 10 | `APIClient.CallService` — the actual send | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
+| 11 | `APIClient.Deserialize` | [APIClient.cs:187](DrawboardCodingExercise.Services/APIClient.cs#L187) |
+| 12 | `FilmMapper.ToDomain` — **snake_case into the domain model** | [FilmMapper.cs:46](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L46) |
+| 13 | `EventAggregator.Post` | [EventAggregator.cs:58](DrawboardCodingExercise.Services/EventAggregator/EventAggregator.cs#L58) |
+| 14 | `ShellViewModel.OnNotifyBusy` / `OnNotifyDone` | [ShellViewModel.cs:115](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L115) / [:98](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L98) |
+
+### Flow B — clicking a film, and the character fan-out
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant LP as FilmListPage
+    participant Conv as ItemClickToClickedItemConverter
+    participant LVM as FilmListViewModel
+    participant NS as NavigationService
+    participant DVM as FilmDetailViewModel
+    participant SOC as SourceOrderedCollection
+    participant Run as BusyOperationRunner
+    participant FS as FilmService
+    participant API as APIClient
+    participant Prog as DispatchedProgress
+    participant TD as ThreadDispatcher
+
+    User->>LP: click a row, EventTriggerBehavior on ItemClick
+    LP->>Conv: Convert the ItemClickEventArgs
+    Conv-->>LP: the clicked FilmListItemViewModel
+    LP->>LVM: FilmSelectedCommand execute
+    LVM->>NS: NavigateAsync FilmDetail with FilmDetailParameter
+    NS->>DVM: resolve, set DataContext, OnNavigatedToAsync
+    DVM->>DVM: BeginPageLifetime
+    DVM->>Run: RunAsync with FilmDetail.Loading
+    Run->>FS: GetFilmAsync by id
+    FS->>FS: cache hit, no network call
+    FS-->>DVM: Film
+    DVM->>DVM: Apply binds title, episode, date, director, producer, crawl
+    DVM->>SOC: Reset with the listed character URLs
+    DVM->>Run: RunAsync with Characters.Loading
+    Run->>FS: GetRelatedResourcesAsync with the progress sink
+    loop each URL, six at a time
+        FS->>API: GetAsync of NamedResourceDto with the absolute URL
+        API-->>FS: name
+        FS->>Prog: Report the RelatedResource
+        Prog->>TD: FireOnUIAndForget
+        TD->>SOC: Add, inserts at its API-listed position
+        SOC-->>DVM: ItemsControl grows in stable order
+    end
+    FS-->>Run: complete ordered collection
+    Run-->>DVM: outcome, HasCompletedRelatedResourceLoad true
+```
+
+**Breakpoints for flow B**
+
+| Order | Method | File |
+|---|---|---|
+| 1 | `ItemClickToClickedItemConverter.Convert` — **is the row non-null?** | [ItemClickToClickedItemConverter.cs:28](DrawboardCodingExercise/ValueConverters/ItemClickToClickedItemConverter.cs#L28) |
+| 2 | `FilmListViewModel.OnFilmSelected` | [FilmListViewModel.cs:144](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L144) |
+| 3 | `FilmDetailViewModel.OnNavigatedToAsync` — **inspect the parameter cast** | [FilmDetailViewModel.cs:157](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L157) |
+| 4 | `FilmService.GetFilmAsync` — **should not reach the network** | [FilmService.cs:103](DrawboardCodingExercise.Services/FilmService.cs#L103) |
+| 5 | `FilmDetailViewModel.Apply` | [FilmDetailViewModel.cs:201](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L201) |
+| 6 | `FilmMapper.NormalizeCrawl` — **the crawl reflow** | [FilmMapper.cs:136](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L136) |
+| 7 | `FilmDetailViewModel.LoadRelatedResourcesAsync` | [FilmDetailViewModel.cs:225](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L225) |
+| 8 | `FilmService.GetRelatedResourcesAsync` | [FilmService.cs:111](DrawboardCodingExercise.Services/FilmService.cs#L111) |
+| 9 | `FilmService.ResolveAsync` — **one per character; watch the throttle** | [FilmService.cs:164](DrawboardCodingExercise.Services/FilmService.cs#L164) |
+| 10 | `DispatchedProgress.Report` | [DispatchedProgress.cs:39](DrawboardCodingExercise.ViewModel/Infrastructure/DispatchedProgress.cs#L39) |
+| 11 | `SourceOrderedCollection.Add` — **the placement decision** | [SourceOrderedCollection.cs:74](DrawboardCodingExercise.ViewModel/Infrastructure/SourceOrderedCollection.cs#L74) |
+
+> Breakpointing inside `ResolveAsync` serialises the fan-out and hides the out-of-order arrival it exists to handle. To observe the real interleaving, use a tracepoint that logs `url` and continues rather than a breakpoint that stops.
+
+### Flow C — a failed request and the retry prompt
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant VM as FilmListViewModel
+    participant Run as BusyOperationRunner
+    participant FS as FilmService
+    participant API as APIClient
+    participant Loc as LocalizationService
+    participant UIS as UserInteractionService
+    actor User
+
+    VM->>Run: RunAsync
+    Run->>FS: the operation
+    FS->>API: GetAsync
+    API->>API: CallService sees a non-2xx status
+    API--x Run: throw HttpStatusException
+    Run->>Run: IsRecoverable, true for status, transport and timeout
+    Run->>Run: DescribeFailure maps the status to a resource key
+    Run->>Loc: Translate Errors.NotFound, RateLimited, Server, Offline or Timeout
+    Run->>UIS: ShowRetryDialogAsync with that message
+    UIS-->>User: Retry or Cancel
+    alt Retry
+        Run->>FS: run the operation again
+    else Cancel
+        Run-->>VM: Failure DeclinedByUser
+        VM->>VM: ErrorMessage set, HasError true
+    end
+    Note over Run: NotifyDoneEvent is posted in finally either way
+```
+
+**Breakpoints for flow C** — force this path by pointing [ApplicationConfiguration.cs:21](DrawboardCodingExercise/Configuration/ApplicationConfiguration.cs#L21) at an unreachable host.
+
+| Order | Method | File |
+|---|---|---|
+| 1 | `APIClient.CallService`, at the status check | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
+| 2 | `BusyOperationRunner.RunAsync`, the catch filters | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
+| 3 | `BusyOperationRunner.DescribeFailure` — **which message was chosen** | [BusyOperationRunner.cs:172](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L172) |
+| 4 | `BusyOperationRunner.AskWhetherToRetryAsync` | [BusyOperationRunner.cs:138](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L138) |
+
+### Flow D — back navigation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant SV as Shell title bar
+    participant SVM as ShellViewModel
+    participant NS as NavigationService
+    participant Frame as Frame
+    participant Old as FilmDetailViewModel being left
+    participant New as FilmListViewModel rebuilt
+
+    User->>SV: click Back
+    SV->>SVM: GoBackCommand
+    SVM->>NS: BackAsync
+    NS->>Frame: read the last BackStack entry
+    Frame-->>NS: NavigationDetails, PageKey plus the original parameter
+    NS->>Frame: GoBack
+    NS->>SVM: raise Navigated
+    SVM->>SVM: CanGoBack re-evaluated, button hides at the root
+    NS->>Old: Navigated also reaches PageViewModelBase.OnNavigatedElsewhere
+    Old->>Old: cancel PageLifetimeToken, detach the handler
+    NS->>New: resolve a fresh instance, OnNavigatedToAsync with the replayed parameter
+    New->>New: loads again, served from the FilmService cache
+```
+
+**Breakpoints for flow D**
+
+| Order | Method | File |
+|---|---|---|
+| 1 | `ShellViewModel.OnGoBack` | [ShellViewModel.cs:61](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L61) |
+| 2 | `NavigationService.BackAsync` | [NavigationService.cs:130](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L130) |
+| 3 | `PageViewModelBase.OnNavigatedElsewhere` — **the cancellation** | [PageViewModelBase.cs:70](DrawboardCodingExercise.ViewModel/Infrastructure/PageViewModelBase.cs#L70) |
+| 4 | `FilmListViewModel.OnNavigatedToAsync` — a **new** instance | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
+
+### Debugging notes
+
+- **Attach to the installed package.** Debug → Other Debug Targets → Debug Installed App Package → *Drawboard Coding Exercise*. Or set the UWP project as startup and press F5.
+- **Serilog writes to the debug sink**, so every REST call appears in the Output window with method, path, status, elapsed and correlation id. Often faster than stepping.
+- **A ViewModel is a new object on every navigation**, back included. A breakpoint that appears to be hit "again with cleared state" is a *different instance*, not a reset one.
+- **`FilmService` is the only single instance** in the data path, so it is where cached state lives. Watch `_films` and `_relatedResourceCache` there.
+- **A second visit to the same film makes no HTTP call at all.** If you are breakpointing in `APIClient` and nothing stops, that is the cache working, not a fault.
+
+---
+
 ## 1. Behavioural changes to test first
 
 These are the ones worth exercising in the running app. §2 onwards is the full inventory.
