@@ -17,10 +17,37 @@ namespace DrawboardCodingExercise.Services;
 /// domain model, and caches the results for the lifetime of the application.
 /// </summary>
 /// <remarks>
-/// Registered as a single instance. The cache is what makes the detail page cheap: the films endpoint returns
-/// every field the detail page shows, including the opening crawl, so once the list has been retrieved a
-/// detail view costs no network call at all. It also compensates for page ViewModels being rebuilt on every
-/// navigation — without it, each back navigation would re-fetch.
+/// <para>
+/// <b>Caching.</b> Two caches, both populated lazily and held in memory only:
+/// <list type="bullet">
+///   <item><description>
+///     <see cref="_films"/> — the entire film list, fetched by the first <see cref="GetFilmsAsync"/> call
+///     (<see cref="GetFilmAsync"/> delegates to it, so a detail-page visit populates it too). One request serves
+///     every later caller.
+///   </description></item>
+///   <item><description>
+///     <see cref="_relatedResourceCache"/> — one entry per related-resource URL, so re-opening a film already
+///     viewed resolves its characters with no requests at all.
+///   </description></item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>Nothing ever expires.</b> There is no time-to-live, no invalidation and no refresh: an entry, once written,
+/// is returned unchanged for the lifetime of the process. The service is registered as a single instance, so that
+/// lifetime is the application's — closing and reopening the app is the only way to see fresh data. Acceptable
+/// here because film records do not change, and the exercise requires no persistence; it would be the wrong
+/// design for volatile data, which would want a time-to-live or an explicit refresh.
+/// </para>
+/// <para>
+/// <b>Failures are not cached.</b> <see cref="_films"/> is assigned only after a successful response, so a
+/// request that throws leaves the cache cold and the next caller retries. A transient network failure therefore
+/// cannot poison the cache into permanently returning nothing.
+/// </para>
+/// <para>
+/// <b>Why it matters.</b> The films endpoint returns every field the detail page displays, including the opening
+/// crawl, so once the list is cached a detail view costs no network call whatsoever. The cache also compensates
+/// for page ViewModels being rebuilt on every navigation — without it, each back navigation would re-fetch.
+/// </para>
 /// </remarks>
 public sealed class FilmService : IFilmService
 {
@@ -43,11 +70,22 @@ public sealed class FilmService : IFilmService
 	/// <summary>Serializes cache population so concurrent callers share one network call.</summary>
 	private readonly SemaphoreSlim _filmCacheGate = new SemaphoreSlim(1, 1);
 
-	/// <summary>Caches resolved related resources by their absolute URL.</summary>
+	/// <summary>Caches resolved related resources by their absolute URL. Entries never expire.</summary>
+	/// <remarks>
+	/// A concurrent dictionary rather than a gated field: entries are independent, so a duplicate fetch of one
+	/// resource is merely wasteful, not incorrect. Only successful resolutions are added.
+	/// </remarks>
 	private readonly ConcurrentDictionary<string, RelatedResource> _relatedResourceCache =
 		new ConcurrentDictionary<string, RelatedResource>(StringComparer.OrdinalIgnoreCase);
 
-	/// <summary>The cached film list, or <see langword="null"/> while the cache is cold.</summary>
+	/// <summary>
+	/// The cached film list, or <see langword="null"/> while the cache is cold.
+	/// </summary>
+	/// <value>
+	/// Assigned once, after a successful fetch, and never cleared or refreshed thereafter. Remaining
+	/// <see langword="null"/> is precisely what makes a failed fetch retryable, so do not assign it before the
+	/// response has been mapped.
+	/// </value>
 	private IReadOnlyList<Film>? _films;
 
 	/// <summary>

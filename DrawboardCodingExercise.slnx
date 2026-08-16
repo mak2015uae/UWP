@@ -16,5 +16,11 @@
   <Project Path="DrawboardCodingExercise/DrawboardCodingExercise.csproj" DefaultStartup="true" Id="5fd44ffe-8199-4ede-bf19-433428625058">
     <Platform Solution="*|ARM64" Project="ARM64" />
     <Platform Solution="*|x64" Project="x64" />
+    <!--
+      Without this, F5 reports "Skipped Deploy ... Project not selected to build for this solution
+      configuration": the app is built but never registered, so nothing launches. Deploy is not implied for
+      packaged projects, it has to be declared.
+    -->
+    <Deploy />
   </Project>
 </Solution>

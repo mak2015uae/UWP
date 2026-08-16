@@ -4,7 +4,7 @@ Every change made to the scaffold, with line numbers as of this commit. Line ref
 
 **Totals:** 31 files created, 30 modified, 7 deleted. 141 tests passing (73 service + 63 ViewModel + 5 live-API). x64 Debug and ARM64 Release both build with zero warnings. The app has been built, installed and run.
 
-Line references use the form [file.cs:42](path#L42) and are clickable.
+Line references are written as `[file.cs:42](path#L42)` and are clickable.
 
 ---
 
@@ -21,7 +21,7 @@ Every requirement in [README.md](README.md), with how it was verified. Option 1 
 | R5 | Page 2 lists one related category | Done | Characters — [FilmDetailViewModel.cs:35](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L35), [FilmDetailPage.xaml:116](DrawboardCodingExercise/View/FilmDetailPage.xaml#L116); unit + live-API tested. Heading confirmed on screen; rows sit below the fold |
 | R6 | **Bonus** — opening crawl on page 2 | Done | [FilmDetailPage.xaml:102](DrawboardCodingExercise/View/FilmDetailPage.xaml#L102); confirmed on screen with paragraph breaks intact |
 | R7 | No library that talks directly to the API | Done | 17 packages total, none API-specific; only `IAPIClient` over `HttpClient` + Newtonsoft |
-| R8 | Solid design principles | Done | SOLID mapping in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) §10 |
+| R8 | Solid design principles | Done | SOLID mapping in [implemented-readme.md](implemented-readme.md) §3 |
 | R9 | Clean, well-factored code | Done | No `Windows.*` in ViewModel/Services; no DTO escapes the services layer; both pages have empty code-behind |
 | R10 | Testable **and** extensible architecture | Done | 63 ViewModel tests run with no UI host; `APIClient` testable offline via an injectable handler; a second API source needs one new service |
 | R11 | Automated tests | Done | 141 passing across three projects; measured coverage ViewModel 87.7%, Contracts 74.5%, Services 45.9% |
@@ -29,13 +29,52 @@ Every requirement in [README.md](README.md), with how it was verified. Option 1 
 | R13 | Usability | Done | Aggregated progress, distinct empty/error states, keyboard-navigable list, accessible back button, theme resources throughout |
 | R14 | Code structure and current UWP idioms | Done | `x:Bind` in item templates, behaviours instead of code-behind handlers, `x:Uid` localization, `RelativePanel` shell |
 | R15 | Persistence not required | Done | In-memory cache only; stated as a non-goal |
-| R16 | README with limitations, extensions, considerations | Done | [SOLUTION.md](SOLUTION.md) |
-| R17 | AI collaboration: challenges and validation | Done | [AI-COLLABORATION.md](AI-COLLABORATION.md) |
+| R16 | README with limitations, extensions, considerations | Done | [implemented-readme.md](implemented-readme.md) §5 |
+| R17 | AI collaboration: challenges and validation | Done | [implemented-readme.md](implemented-readme.md) §2 and §6 |
 | R18 | Zip and send to hiring@drawboard.com | **Outstanding** | Yours to send |
 
 **Still unverified visually:** the character rows themselves. The heading renders, the service resolves real names against the live API, and the ViewModel tests cover insertion order — but the rows sit below the fold in the screenshots taken so far. Scroll the detail page to confirm.
 
 **XML documentation is verified mechanically, not asserted.** `CS1591` is promoted to an **error** in all seven managed projects, so an undocumented public member fails the build. `CS1571`–`CS1573` and `CS1712` (mismatched, duplicated, missing `param`/`typeparam` tags) are also on with documentation generation, and all seven projects rebuild with **zero warnings of any kind**. Inspecting the generated documentation files confirms **633 documented members** — 182 Contracts, 136 ViewModel, 81 UWP head, 76 Services, 43 test support, 115 tests — with **zero** lacking a `summary` or `inheritdoc`.
+
+---
+
+## 0.4 How the solution meets the evaluation criteria
+
+[README.md](README.md) lists eight things the submission is judged on. Each is answered directly below, with files cited so any claim can be checked.
+
+**Solid design principles.** Each type has one job: `RequestUriResolver` builds URIs, `FilmMapper` maps wire format to domain, `FilmService` retrieves and caches, `BusyOperationRunner` orchestrates progress and retry. Dependency inversion holds throughout — ViewModels depend only on `.Contracts` interfaces, never on a concrete service or a platform type. Interfaces stay segregated: `INavigateToAware` and `IProvidePageHeader` are single-method opt-ins rather than a mandatory page base class.
+
+**Clean, well-factored code.** No `Windows.*` reference exists in `.ViewModel` or `.Services`, and no data transfer object escapes the services layer, so the boundaries are enforced by the compiler rather than by convention. Both pages have empty code-behind — the list's click reaches its ViewModel through a XAML behaviour and a converter. The largest type is 251 lines, after the ordered-insertion logic was extracted to [SourceOrderedCollection](DrawboardCodingExercise.ViewModel/Infrastructure/SourceOrderedCollection.cs).
+
+**An architecture that is testable and extensible.** 141 tests run with no UI host and no network, because every platform concern sits behind a `.Contracts` interface; `APIClient` itself is testable offline through an injectable `HttpMessageHandler`. Adding a page is four mechanical edits (a `PageKey` value, one `RegisterView` line, the csproj entries, a resw string) and reuses `PageViewModelBase`, `BusyOperationRunner` and `SourceOrderedCollection<T>` unchanged. **One honest gap:** a second API on a *different* origin does not work as-is — see "Adding a books API" below.
+
+**Automated tests.** 141 tests across three projects, including 5 against the live API whose job is to re-verify the assumptions the offline fixtures rest on, since canned payloads would keep passing if the real service changed shape. Doubles are shared through `.TestSupport` rather than duplicated, and the fixtures deliberately keep the awkward parts — snake_case names, absolute URLs, an unparsable date, a null title. Measured coverage: ViewModel 87.7%, Contracts 74.5%, Services 45.9%.
+
+**Error checking and reporting to the user.** Five distinct localized messages distinguish being offline from a missing resource, throttling, a server fault and a timeout, so the user can judge whether retrying is worth their time ([BusyOperationRunner.cs:172](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L172)). Exceptions the runner does not recognise propagate deliberately, rather than hiding a defect behind a retry dialog. Partial failure is contained: a failed character load still leaves the film's own details on screen with a scoped message.
+
+**Usability for the user.** Progress is aggregated across concurrent operations so the indicator clears only when the last finishes, and empty, error and loading states are distinct rather than inferred from a blank page. The character list fills incrementally and holds a stable order while filling, instead of reshuffling as responses arrive. Not yet done, and stated rather than implied: the accessibility and narrow-window checklist ([implemented-readme.md](implemented-readme.md) §6) has not been walked through.
+
+**Code structure and adherence to current UWP idioms.** Item templates use compiled `x:Bind` while page-level bindings stay classic, because the navigation service assigns `DataContext` *after* construction — a distinction that matters and is commented in the XAML. Gestures reach ViewModels through `Microsoft.Xaml.Behaviors` rather than code-behind handlers, text is localized with `x:Uid`, and colours come from `ThemeResource` so both themes work. XML documentation is a build gate: `CS1591` is an error in all seven projects, giving 633 documented members and zero warnings.
+
+**No persistence required.** Nothing is persisted; the only state is an in-memory cache in `FilmService`, which dies with the process. That cache is a performance decision rather than storage — the films response already carries every field the detail page shows, so a detail view costs no network call and back navigation is instant.
+
+### Adding a books API — what it would actually take
+
+**A new page is easy.** The four edits above, plus a ViewModel deriving from `PageViewModelBase`. Progress, retry, cancellation-on-navigate-away, incremental ordered lists and localization all come for free.
+
+**A new API on the same host is easy too** — `RequestUriResolver` already accepts any path or absolute URL beneath the configured base.
+
+**A new API on a *different* host is the one thing that does not work today.** `ApplicationConfiguration` is registered as a single `IAPISettings`, `APIClient` derives one base URI from it at [APIClient.cs:106](DrawboardCodingExercise.Services/APIClient.cs#L106), and [RequestUriResolver.Resolve](DrawboardCodingExercise.Services/Api/RequestUriResolver.cs#L72) *deliberately rejects* anything outside that origin — a guard that stops a payload redirecting the client, but also stops a second origin. Since `FilmService` is the only consumer of `IAPIClient`, the remedy is contained: register clients keyed per API and let the composition root inject the right one.
+
+```csharp
+builder.RegisterType<BookService>().As<IBookService>()
+    .WithParameter(ResolvedParameter.ForKeyed<IAPIClient>(ApiName.Library));
+```
+
+Services keep taking a plain `IAPIClient`, so no constructor changes, no test changes, and no container types leak into `.Services` — Autofac's keyed resolution acts as the abstract factory, with all container knowledge confined to [WebServicesModule](DrawboardCodingExercise/Module/WebServicesModule.cs). Authentication needs no client change either: `APIClient` already accepts an `HttpMessageHandler`, so a per-API `DelegatingHandler` can attach an API key.
+
+This is described rather than built, because implementing it before a second API exists would be speculative.
 
 ---
 
@@ -100,22 +139,22 @@ sequenceDiagram
 
 **Breakpoints for flow A**
 
-| Order | Method | File |
-|---|---|---|
-| 1 | `App.OnLaunched` | [App.xaml.cs:35](DrawboardCodingExercise/App.xaml.cs#L35) |
-| 2 | `App.BuildContainer` | [App.xaml.cs:72](DrawboardCodingExercise/App.xaml.cs#L72) |
-| 3 | `ShellViewModel.OnNavigatedToAsync` | [ShellViewModel.cs:81](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L81) |
-| 4 | `NavigationService.NavigateAsync` | [NavigationService.cs:78](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L78) |
-| 5 | `FilmListViewModel.OnNavigatedToAsync` | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
-| 6 | `BusyOperationRunner.RunAsync` | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
-| 7 | `FilmService.GetFilmsAsync` | [FilmService.cs:68](DrawboardCodingExercise.Services/FilmService.cs#L68) |
-| 8 | `APIClient.GetAsync` | [APIClient.cs:117](DrawboardCodingExercise.Services/APIClient.cs#L117) |
-| 9 | `RequestUriResolver.Resolve` — **inspect the returned URI here** | [RequestUriResolver.cs:72](DrawboardCodingExercise.Services/Api/RequestUriResolver.cs#L72) |
-| 10 | `APIClient.CallService` — the actual send | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
-| 11 | `APIClient.Deserialize` | [APIClient.cs:187](DrawboardCodingExercise.Services/APIClient.cs#L187) |
-| 12 | `FilmMapper.ToDomain` — **snake_case into the domain model** | [FilmMapper.cs:46](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L46) |
-| 13 | `EventAggregator.Post` | [EventAggregator.cs:58](DrawboardCodingExercise.Services/EventAggregator/EventAggregator.cs#L58) |
-| 14 | `ShellViewModel.OnNotifyBusy` / `OnNotifyDone` | [ShellViewModel.cs:115](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L115) / [:98](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L98) |
+| Order | Method | Purpose | File |
+|---|---|---|---|
+| 1 | `App.OnLaunched` | The entry point: builds the container once, then creates the shell and window. | [App.xaml.cs:35](DrawboardCodingExercise/App.xaml.cs#L35) |
+| 2 | `App.BuildContainer` | Registers the configuration, the logger, and every Autofac module found in the assembly. | [App.xaml.cs:72](DrawboardCodingExercise/App.xaml.cs#L72) |
+| 3 | `ShellViewModel.OnNavigatedToAsync` | Subscribes to the progress events, then kicks off the very first navigation. | [ShellViewModel.cs:81](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L81) |
+| 4 | `NavigationService.NavigateAsync` | Resolves the page type and ViewModel from the key, drives the frame, attaches the data context. | [NavigationService.cs:78](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L78) |
+| 5 | `FilmListViewModel.OnNavigatedToAsync` | Starts the film load and projects the result into bindable rows. | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
+| 6 | `BusyOperationRunner.RunAsync` | Wraps the load in progress reporting and the retry loop; posts the paired notifications. | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
+| 7 | `FilmService.GetFilmsAsync` | Returns the cached list, or fetches and caches it behind a gate on first call. | [FilmService.cs:68](DrawboardCodingExercise.Services/FilmService.cs#L68) |
+| 8 | `APIClient.GetAsync` | Turns a path into a request and deserializes the JSON response into DTOs. | [APIClient.cs:117](DrawboardCodingExercise.Services/APIClient.cs#L117) |
+| 9 | `RequestUriResolver.Resolve` | Builds the final absolute URI — inspect it to confirm the base address was not doubled. | [RequestUriResolver.cs:72](DrawboardCodingExercise.Services/Api/RequestUriResolver.cs#L72) |
+| 10 | `APIClient.CallService` | The actual send: attaches the correlation id and turns a non-2xx status into an exception. | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
+| 11 | `APIClient.Deserialize` | Converts the body into DTOs, failing loudly rather than returning null. | [APIClient.cs:187](DrawboardCodingExercise.Services/APIClient.cs#L187) |
+| 12 | `FilmMapper.ToDomain` | Maps the snake_case DTOs to the domain model, parsing the id, date and crawl. | [FilmMapper.cs:46](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L46) |
+| 13 | `EventAggregator.Post` | Fans a message out to matching subscribers synchronously, in registration order. | [EventAggregator.cs:58](DrawboardCodingExercise.Services/EventAggregator/EventAggregator.cs#L58) |
+| 14 | `ShellViewModel.OnNotifyBusy` / `OnNotifyDone` | Adds or clears the entry behind the title bar's progress ring. | [ShellViewModel.cs:115](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L115) / [:98](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L98) |
 
 ### Flow B — clicking a film, and the character fan-out
 
@@ -164,19 +203,19 @@ sequenceDiagram
 
 **Breakpoints for flow B**
 
-| Order | Method | File |
-|---|---|---|
-| 1 | `ItemClickToClickedItemConverter.Convert` — **is the row non-null?** | [ItemClickToClickedItemConverter.cs:28](DrawboardCodingExercise/ValueConverters/ItemClickToClickedItemConverter.cs#L28) |
-| 2 | `FilmListViewModel.OnFilmSelected` | [FilmListViewModel.cs:144](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L144) |
-| 3 | `FilmDetailViewModel.OnNavigatedToAsync` — **inspect the parameter cast** | [FilmDetailViewModel.cs:157](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L157) |
-| 4 | `FilmService.GetFilmAsync` — **should not reach the network** | [FilmService.cs:103](DrawboardCodingExercise.Services/FilmService.cs#L103) |
-| 5 | `FilmDetailViewModel.Apply` | [FilmDetailViewModel.cs:201](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L201) |
-| 6 | `FilmMapper.NormalizeCrawl` — **the crawl reflow** | [FilmMapper.cs:136](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L136) |
-| 7 | `FilmDetailViewModel.LoadRelatedResourcesAsync` | [FilmDetailViewModel.cs:225](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L225) |
-| 8 | `FilmService.GetRelatedResourcesAsync` | [FilmService.cs:111](DrawboardCodingExercise.Services/FilmService.cs#L111) |
-| 9 | `FilmService.ResolveAsync` — **one per character; watch the throttle** | [FilmService.cs:164](DrawboardCodingExercise.Services/FilmService.cs#L164) |
-| 10 | `DispatchedProgress.Report` | [DispatchedProgress.cs:39](DrawboardCodingExercise.ViewModel/Infrastructure/DispatchedProgress.cs#L39) |
-| 11 | `SourceOrderedCollection.Add` — **the placement decision** | [SourceOrderedCollection.cs:74](DrawboardCodingExercise.ViewModel/Infrastructure/SourceOrderedCollection.cs#L74) |
+| Order | Method | Purpose | File |
+|---|---|---|---|
+| 1 | `ItemClickToClickedItemConverter.Convert` | Pulls the clicked row out of the event args — a null here means the click missed a row. | [ItemClickToClickedItemConverter.cs:28](DrawboardCodingExercise/ValueConverters/ItemClickToClickedItemConverter.cs#L28) |
+| 2 | `FilmListViewModel.OnFilmSelected` | Navigates to the detail page, carrying only the film's identifier. | [FilmListViewModel.cs:144](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L144) |
+| 3 | `FilmDetailViewModel.OnNavigatedToAsync` | Casts the navigation parameter and starts the detail load; a bad cast becomes the not-found state. | [FilmDetailViewModel.cs:157](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L157) |
+| 4 | `FilmService.GetFilmAsync` | Resolves the film from the cached list — on a warm cache this issues no request at all. | [FilmService.cs:103](DrawboardCodingExercise.Services/FilmService.cs#L103) |
+| 5 | `FilmDetailViewModel.Apply` | Binds the five detail fields and the crawl, and primes the ordered collection with the character URLs. | [FilmDetailViewModel.cs:201](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L201) |
+| 6 | `FilmMapper.NormalizeCrawl` | Drops the API's hard line wraps so the crawl reflows, while keeping its paragraph breaks. | [FilmMapper.cs:136](DrawboardCodingExercise.Services/Mapping/FilmMapper.cs#L136) |
+| 7 | `FilmDetailViewModel.LoadRelatedResourcesAsync` | Runs the character load as a *separate* guarded operation, so its failure cannot cost the film details. | [FilmDetailViewModel.cs:225](DrawboardCodingExercise.ViewModel/FilmDetailViewModel.cs#L225) |
+| 8 | `FilmService.GetRelatedResourcesAsync` | Fans out one request per character URL and assembles them back into API order. | [FilmService.cs:111](DrawboardCodingExercise.Services/FilmService.cs#L111) |
+| 9 | `FilmService.ResolveAsync` | Resolves a single character; the semaphore here is what caps the fan-out at six in flight. | [FilmService.cs:164](DrawboardCodingExercise.Services/FilmService.cs#L164) |
+| 10 | `DispatchedProgress.Report` | Marshals each arrival onto the UI thread, since a bound collection cannot be touched off it. | [DispatchedProgress.cs:39](DrawboardCodingExercise.ViewModel/Infrastructure/DispatchedProgress.cs#L39) |
+| 11 | `SourceOrderedCollection.Add` | The placement decision: inserts the row at its API-listed position instead of appending. | [SourceOrderedCollection.cs:74](DrawboardCodingExercise.ViewModel/Infrastructure/SourceOrderedCollection.cs#L74) |
 
 > Breakpointing inside `ResolveAsync` serialises the fan-out and hides the out-of-order arrival it exists to handle. To observe the real interleaving, use a tracepoint that logs `url` and continues rather than a breakpoint that stops.
 
@@ -214,12 +253,12 @@ sequenceDiagram
 
 **Breakpoints for flow C** — force this path by pointing [ApplicationConfiguration.cs:21](DrawboardCodingExercise/Configuration/ApplicationConfiguration.cs#L21) at an unreachable host.
 
-| Order | Method | File |
-|---|---|---|
-| 1 | `APIClient.CallService`, at the status check | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
-| 2 | `BusyOperationRunner.RunAsync`, the catch filters | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
-| 3 | `BusyOperationRunner.DescribeFailure` — **which message was chosen** | [BusyOperationRunner.cs:172](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L172) |
-| 4 | `BusyOperationRunner.AskWhetherToRetryAsync` | [BusyOperationRunner.cs:138](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L138) |
+| Order | Method | Purpose | File |
+|---|---|---|---|
+| 1 | `APIClient.CallService` | Where the response status is inspected and a non-2xx becomes `HttpStatusException`. | [APIClient.cs:219](DrawboardCodingExercise.Services/APIClient.cs#L219) |
+| 2 | `BusyOperationRunner.RunAsync` | The catch filters sort the failure into retryable, cancelled, or a defect that should propagate. | [BusyOperationRunner.cs:58](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L58) |
+| 3 | `BusyOperationRunner.DescribeFailure` | Chooses which localized message the user sees — offline, not-found, throttled, server or timeout. | [BusyOperationRunner.cs:172](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L172) |
+| 4 | `BusyOperationRunner.AskWhetherToRetryAsync` | Shows the dialog on the UI thread and returns the choice that decides retry versus give up. | [BusyOperationRunner.cs:138](DrawboardCodingExercise.Services/BusyOperationRunner.cs#L138) |
 
 ### Flow D — back navigation
 
@@ -250,12 +289,12 @@ sequenceDiagram
 
 **Breakpoints for flow D**
 
-| Order | Method | File |
-|---|---|---|
-| 1 | `ShellViewModel.OnGoBack` | [ShellViewModel.cs:61](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L61) |
-| 2 | `NavigationService.BackAsync` | [NavigationService.cs:130](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L130) |
-| 3 | `PageViewModelBase.OnNavigatedElsewhere` — **the cancellation** | [PageViewModelBase.cs:70](DrawboardCodingExercise.ViewModel/Infrastructure/PageViewModelBase.cs#L70) |
-| 4 | `FilmListViewModel.OnNavigatedToAsync` — a **new** instance | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
+| Order | Method | Purpose | File |
+|---|---|---|---|
+| 1 | `ShellViewModel.OnGoBack` | The back button's command, enabled only while the navigation stack has somewhere to return to. | [ShellViewModel.cs:61](DrawboardCodingExercise.ViewModel/ShellViewModel.cs#L61) |
+| 2 | `NavigationService.BackAsync` | Reads the back-stack entry, replays its original parameter, and raises `Navigated`. | [NavigationService.cs:130](DrawboardCodingExercise/CoreFramework/NavigationService.cs#L130) |
+| 3 | `PageViewModelBase.OnNavigatedElsewhere` | Cancels the departing page's token so its in-flight work stops, and detaches its own handler. | [PageViewModelBase.cs:70](DrawboardCodingExercise.ViewModel/Infrastructure/PageViewModelBase.cs#L70) |
+| 4 | `FilmListViewModel.OnNavigatedToAsync` | Runs again on a brand-new instance — the state you see is reloaded from cache, not restored. | [FilmListViewModel.cs:101](DrawboardCodingExercise.ViewModel/FilmListViewModel.cs#L101) |
 
 ### Debugging notes
 
@@ -515,7 +554,9 @@ Both pages have empty code-behind. The list's click gesture reaches the ViewMode
 
 ### Documentation
 
-[CHANGES.md](CHANGES.md) (this file), [SOLUTION.md](SOLUTION.md), [AI-COLLABORATION.md](AI-COLLABORATION.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md).
+[implemented-readme.md](implemented-readme.md) — the consolidated implementation reference, and the place to start. [CHANGES.md](CHANGES.md) (this file) is its detail companion; [CLAUDE.md](CLAUDE.md) holds the build and run commands.
+
+Four earlier documents (`SOLUTION.md`, `AI-COLLABORATION.md`, `ARCHITECTURE.md`, `IMPLEMENTATION_PLAN.md`) were consolidated into `implemented-readme.md` and removed, so that one file is the single reference rather than six overlapping ones.
 
 ---
 

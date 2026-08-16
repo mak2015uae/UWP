@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Drawboard UWP coding exercise, **implemented**. The task (see [README.md](README.md)) was to extend the scaffold with two pages driven by a public REST API, called directly through the provided `IAPIClient`.
 
-Delivered: a film list page and a film detail page against `https://swapi.info`, including the bonus opening crawl. Read [CHANGES.md](CHANGES.md) for every change with line references, [SOLUTION.md](SOLUTION.md) for design decisions and limitations, and [ARCHITECTURE.md](ARCHITECTURE.md) for the scaffold as originally supplied.
+Delivered: a film list page and a film detail page against `https://swapi.info`, including the bonus opening crawl. Start with [implemented-readme.md](implemented-readme.md) — the consolidated reference covering the architecture, flow, challenges, changes and testing. [CHANGES.md](CHANGES.md) is its detail companion: every change with line references, plus sequence diagrams and breakpoint tables for debugging.
 
 ## Build & test
 
